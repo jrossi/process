@@ -1,7 +1,7 @@
 // goforever - processes management
 // Copyright (c) 2013 Garrett Woodworth (https://github.com/gwoo).
 
-package main
+package process
 
 import (
 	"encoding/json"
@@ -21,7 +21,7 @@ var ping = "1m"
 func RunProcess(name string, p *Process) chan *Process {
 	ch := make(chan *Process)
 	go func() {
-		p.start(name)
+		p.Start(name)
 		p.ping(ping, func(time time.Duration, p *Process) {
 			if p.Pid > 0 {
 				p.respawns = 0
@@ -29,7 +29,7 @@ func RunProcess(name string, p *Process) chan *Process {
 				p.Status = "running"
 			}
 		})
-		go p.watch()
+		go p.Watch()
 		ch <- p
 	}()
 	return ch
@@ -63,7 +63,7 @@ func (p *Process) String() string {
 }
 
 //Find a process by name
-func (p *Process) find() (*os.Process, string, error) {
+func (p *Process) Find() (*os.Process, string, error) {
 	if p.Pidfile == "" {
 		return nil, "", errors.New("Pidfile is empty.")
 	}
@@ -83,7 +83,7 @@ func (p *Process) find() (*os.Process, string, error) {
 }
 
 //Start the process
-func (p *Process) start(name string) string {
+func (p *Process) Start(name string) string {
 	p.Name = name
 	wd, _ := os.Getwd()
 	proc := &os.ProcAttr{
@@ -113,7 +113,7 @@ func (p *Process) start(name string) string {
 }
 
 //Stop the process
-func (p *Process) stop() string {
+func (p *Process) Stop() string {
 	if p.x != nil {
 		// p.x.Kill() this seems to cause trouble
 		cmd := exec.Command("kill", fmt.Sprintf("%d", p.x.Pid))
@@ -121,15 +121,15 @@ func (p *Process) stop() string {
 		if err != nil {
 			log.Println(err)
 		}
-		p.children.stop("all")
+		p.children.Stop("all")
 	}
-	p.release("stopped")
+	p.Release("stopped")
 	message := fmt.Sprintf("%s stopped.\n", p.Name)
 	return message
 }
 
 //Release process and remove pidfile
-func (p *Process) release(status string) {
+func (p *Process) Release(status string) {
 	if p.x != nil {
 		p.x.Release()
 	}
@@ -139,8 +139,8 @@ func (p *Process) release(status string) {
 }
 
 //Restart the process
-func (p *Process) restart() (chan *Process, string) {
-	p.stop()
+func (p *Process) Restart() (chan *Process, string) {
+	p.Stop()
 	message := fmt.Sprintf("%s restarted.\n", p.Name)
 	ch := RunProcess(p.Name, p)
 	return ch, message
@@ -164,9 +164,9 @@ func (p *Process) ping(duration string, f func(t time.Duration, p *Process)) {
 }
 
 //Watch the process
-func (p *Process) watch() {
+func (p *Process) Watch() {
 	if p.x == nil {
-		p.release("stopped")
+		p.Release("stopped")
 		return
 	}
 	status := make(chan *os.ProcessState)
@@ -189,7 +189,7 @@ func (p *Process) watch() {
 		fmt.Fprintf(os.Stderr, "%s exited = %#v\n", p.Name, s.Exited())
 		p.respawns++
 		if p.respawns > p.Respawn {
-			p.release("exited")
+			p.Release("exited")
 			log.Printf("%s respawn limit reached.\n", p.Name)
 			return
 		}
@@ -198,16 +198,16 @@ func (p *Process) watch() {
 			t, _ := time.ParseDuration(p.Delay)
 			time.Sleep(t)
 		}
-		p.restart()
+		p.Restart()
 		p.Status = "restarted"
 	case err := <-died:
-		p.release("killed")
+		p.Release("killed")
 		log.Printf("%d %s killed = %#v", p.x.Pid, p.Name, err)
 	}
 }
 
 //Run child processes
-func (p *Process) run() {
+func (p *Process) Run() {
 	for name, p := range p.children {
 		RunProcess(name, p)
 	}
@@ -227,7 +227,7 @@ func (c children) String() string {
 }
 
 //Get child processes names.
-func (c children) keys() []string {
+func (c children) Keys() []string {
 	keys := []string{}
 	for k, _ := range c {
 		keys = append(keys, k)
@@ -236,23 +236,23 @@ func (c children) keys() []string {
 }
 
 //Get child process.
-func (c children) get(key string) *Process {
+func (c children) Get(key string) *Process {
 	if v, ok := c[key]; ok {
 		return v
 	}
 	return nil
 }
 
-func (c children) stop(name string) {
+func (c children) Stop(name string) {
 	if name == "all" {
 		for name, p := range c {
-			p.stop()
+			p.Stop()
 			delete(c, name)
 		}
 		return
 	}
-	p := c.get(name)
-	p.stop()
+	p := c.Get(name)
+	p.Stop()
 	delete(c, name)
 }
 

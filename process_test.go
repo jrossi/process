@@ -1,19 +1,17 @@
 // goforever - processes management
 // Copyright (c) 2013 Garrett Woodworth (https://github.com/gwoo).
 
-package main
+package process
 
 import (
 	"testing"
 )
 
 func TestPidfile(t *testing.T) {
-	c := &Config{Processes: []*Process{&Process{
+	p := &Process{
 		Name:    "test",
 		Pidfile: "test.pid",
-	}},
 	}
-	p := c.Get("test")
 	err := p.Pidfile.write(100)
 	if err != nil {
 		t.Errorf("Error: %s.", err)
@@ -33,7 +31,7 @@ func TestPidfile(t *testing.T) {
 }
 
 func TestProcessStart(t *testing.T) {
-	c := &Config{Processes: []*Process{&Process{
+	p := &Process{
 		Name:    "bash",
 		Command: "/bin/bash",
 		Args:    []string{"foo", "bar"},
@@ -41,14 +39,12 @@ func TestProcessStart(t *testing.T) {
 		Logfile: "debug.log",
 		Errfile: "error.log",
 		Respawn: 3,
-	}},
 	}
-	p := c.Get("bash")
-	p.start("bash")
+	p.Start("bash")
 	ex := 0
 	r := p.x.Pid
 	if ex >= r {
 		t.Errorf("Expected %#v < %#v\n", ex, r)
 	}
-	p.stop()
+	p.Stop()
 }
